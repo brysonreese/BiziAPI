@@ -30,6 +30,10 @@ class UserModel(db.Model):
     def get_by_uid(cls, uid_to_find):
         return cls.query.get_or_404(uid_to_find)
 
+    @classmethod
+    def get_by_email(cls, email_to_find):
+        return cls.query.filter_by(email = email_to_find).first()
+
     def save(self):
         db.session.add(self)
         db.session.commit()

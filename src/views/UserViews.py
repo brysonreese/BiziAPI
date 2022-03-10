@@ -1,6 +1,7 @@
-from flask import Flask, jsonify, request, Response, Blueprint
+from flask import Flask, jsonify, request, Response, Blueprint, render_template
+from itsdangerous import Serializer
 from ..models.UserModel import UserModel, UserSchema
-from ..shared.Authentication import Auth
+from ..shared.Authentication import Auth, jwt
 from ..config import os
 
 user_api = Blueprint('users', __name__)
@@ -13,32 +14,41 @@ def get_all_users():
     data = serializer.dump(users)
     return jsonify(data), 200
 
-## add user in json format
-@user_api.route('/', methods=['POST'])
-def add_user():
-    data = request.get_json()
-    new_user = UserModel(data)
-    new_user.save()
-
-    authenticate = Auth()
-    token = authenticate.encode(new_user.uid)
-
-    return jsonify({'token': token, 'public key': os.getenv('BIZI_EC_PUBLIC_KEY')}), 201
-
 ## get user by uuid
-@user_api.route('/<uuid:uid>', methods=['GET'])
-def get_user(uid):
+@user_api.route('/byuid', methods=['GET'])
+def get_user():
+    req = request.get_json()
+    uid = req.get("uid")
     authenticate = Auth()
-    authenticate.validate(request.headers.get('Authorization'), uid)
+    authenticate.validate(request.headers, uid)
     
     user = UserModel.get_by_uid(uid)
     serializer = UserSchema()
     data = serializer.dump(user)
     return jsonify(data), 200
 
+## add user in json format
+@user_api.route('/', methods=['POST'])
+def add_user():
+    data = request.get_json()
+    new_user = UserModel(data)
+    new_user.save()
+    serializer = UserSchema()
+    user = serializer.dump(new_user)
+
+    authenticate = Auth()
+    token = authenticate.encode(user["uid"])
+
+    return jsonify({'token': token, 'public key': os.getenv('BIZI_EC_PUBLIC_KEY')}), 201
+
 ## update user by passing uuid in URL and adding json for the rest
-@user_api.route('/<uuid:uid>', methods=['PUT'])
-def update_user(uid):
+@user_api.route('/', methods=['PUT'])
+def update_user():
+    req = request.get_json()
+    uid = req.get("uid_to_update")
+    authenticate = Auth()
+    authenticate.validate(request.headers, uid)
+
     user_to_update = UserModel.get_by_uid(uid)
 
     data = request.get_json()
@@ -54,31 +64,41 @@ def update_user(uid):
     return jsonify(user_data), 200
 
 ## delete user by supplying uuid
-@user_api.route('/<uuid:uid>', methods=['DELETE'])
+@user_api.route('/', methods=['DELETE'])
 def delete_user(uid):
+    req = request.get_json()
+    uid = req.get("uid")
+    authenticate = Auth()
+    authenticate.validate(request.headers, uid)
+
     user_to_delete = UserModel.get_by_uid(uid)
     user_to_delete.delete()
     return jsonify({"message": "user deleted"}), 204
 
-##debugging method to delete all users in database
-@user_api.route('/', methods=['DELETE'])
+## debugging method to delete all users in database
+@user_api.route('/deleteallusers', methods=['DELETE'])
 def delete_all():
     Users = UserModel.get_all()
     for u in Users:
         u.delete()
     return jsonify({"message": "All users deleted"}), 204
 
-@user_api.route('/password/<uuid:uid>/<string:password>', methods=['GET'])
-def check_password(uid, password):
-    user = UserModel.get_by_uid(uid)
-    if user.check_hash(password):
-        return jsonify({"message": "verified"}) 
-    return jsonify({"message": "nah"})
+## verifies user login info
+@user_api.route('/authenticate', methods=['POST'])
+def check_password():
+    credentials = request.get_json()
+    email = credentials.get("email")
+    user = UserModel.get_by_email(email)
+    if isinstance(user, type(None)):
+        return jsonify({"message": "noemailfound"}), 403
+    serializer = UserSchema()
+    data = serializer.dump(user)
+    if user.check_hash(credentials["password"]):
+        authenticate = Auth()
+        token = authenticate.encode(user.uid)
+        return jsonify({'token': token, 'public key': os.getenv('BIZI_EC_PUBLIC_KEY')}), 201 
+    return jsonify({"message": "nah"}), 403
 
-@user_api.errorhandler(404)
-def not_found(error):
-    return jsonify({"message": "Resource not found"}), 404
-
-@user_api.errorhandler(500)
-def internal_server(error):
-    return jsonify({"message": "There is a problem"}), 500
+@user_api.errorhandler(jwt.exceptions.PyJWTError)
+def jwt_error(e):
+    return jsonify({"message": "Not Authorized"}), 401

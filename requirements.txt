@@ -28,3 +28,4 @@ toml==0.10.2
 typing-extensions==4.0.1
 Werkzeug==2.0.2
 wrapt==1.13.3
+flask-cors==3.0.10
