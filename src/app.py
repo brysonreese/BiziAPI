@@ -2,14 +2,15 @@ from flask import Flask
 from flask_mail import Mail
 from sqlalchemy import true
 from .config import app_config, Development, Production
-from .models import db, bcrypt
+from .models import db, bcrypt, socketio
 from .views.UserViews import user_api as user_blueprint
 from .views.HouseholdViews import household_api as household_blueprint
 from flask_migrate import Migrate
 from flask_cors import CORS
 import os
 
-migrate = Migrate()
+migrate = Migrate(compare_type=True)
+
 
 def create_app():
     """
@@ -28,6 +29,7 @@ def create_app():
     bcrypt.init_app(app)
     db.init_app(app)
     migrate.init_app(app, db)
+    socketio.init_app(app)
 
     app.register_blueprint(user_blueprint, url_prefix='/api/v1/users')
     app.register_blueprint(household_blueprint, url_prefix='/api/v1/households')

@@ -1,23 +1,31 @@
+from pickle import FALSE, TRUE
 from marshmallow import Schema, fields
 from sqlalchemy.dialects.postgresql import UUID
 from . import db
 from ..app import bcrypt
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
+import os
 
 ## model for users, contains all basic user info
 class UserModel(db.Model):
     __tablename__ = 'users'
 
-    #question about server_default = db.text("gen_random_uuid()"),
     uid = db.Column(UUID(as_uuid=True), primary_key = True, server_default = db.text("gen_random_uuid()"),)
     name = db.Column(db.String(255), nullable = False)
     email = db.Column(db.String(255), nullable = False)
     password = db.Column(db.String(255), nullable = False)
-    hid = db.Column(db.Integer())
+    hid = db.Column(UUID(as_uuid=True))
+    is_verified = db.Column(db.Boolean())
+    venmo_link = db.Column(db.String(255))
 
     def __init__(self, data):
         self.name = data.get('name')
         self.email = data.get('email')
         self.password = self.__generate_hash(data.get('password'))
+        self.is_verified = False
 
     def __repr__(self):
         return "<uid {}>".format(self.uid)
@@ -34,6 +42,28 @@ class UserModel(db.Model):
     def get_by_email(cls, email_to_find):
         return cls.query.filter_by(email = email_to_find).first()
 
+    @classmethod
+    def send_email(cls, email, subject, html):
+
+        sender_address = 'biziapplication@gmail.com'
+        sender_pass = 'v92zqTeGkNiXM5J'
+        message = MIMEMultipart('alternative')
+        message['From'] = sender_address
+        message['To'] = email
+        message['Subject'] = subject
+        message.attach(MIMEText(html, 'html'))
+        session = smtplib.SMTP('smtp.gmail.com', 587)
+        session.starttls() 
+        session.login(sender_address, sender_pass)
+        text = message.as_string()
+        session.sendmail(sender_address, email, text)
+        session.quit()
+
+    def set_user_hid(self, hid):
+        self.hid = hid
+        db.session.add(self)
+        db.session.commit()
+
     def save(self):
         db.session.add(self)
         db.session.commit()
@@ -41,11 +71,14 @@ class UserModel(db.Model):
     def delete(self):
         db.session.delete(self)
         db.session.commit()
+    
+    def verify_registration(self):
+        self.is_verified= True
+        db.session.commit()
 
     def update(self, data):
         for t in data.items():
             if t[0] == 'password':
-                print(t[1])
                 self.password = self.__generate_hash(t[1])
             else:
                 setattr(self, t[0], t[1])
@@ -63,4 +96,4 @@ class UserSchema(Schema):
     name = fields.String()
     email = fields.Email()
     password = fields.String()
-    hid = fields.Integer()
+    hid = fields.UUID()
