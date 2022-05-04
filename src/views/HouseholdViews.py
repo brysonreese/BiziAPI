@@ -220,12 +220,12 @@ def delete_all():
         h.delete()
     return {"message": "All households deleted"}, 204
 
-@household_api.route('/<uuid:hid>/<uuid:uid>', methods=["DELETE"])
-def delete_user_from_household(hid, uid):
+@household_api.route('/<uuid:hid>/<string:email>', methods=["DELETE"])
+def delete_user_from_household(hid, email):
     household_to_delete_from = HouseholdModel.get_by_hid(hid)
-    user_to_delete = UserModel.get_by_uid(uid)
+    user_to_delete = UserModel.get_by_email(email)
     ##try:
-    household_to_delete_from.delete_user(str(uid))
+    household_to_delete_from.delete_user(str(user_to_delete.uid))
     household_to_delete_from.save()
     user_to_delete.hid = sqlalchemy.null()
     user_to_delete.save()
