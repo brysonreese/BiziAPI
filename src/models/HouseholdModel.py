@@ -64,7 +64,6 @@ class HouseholdModel(db.Model):
         if not self.members:
             self.members = []
         HouseholdModel.query.filter_by(hid=self.hid).one().members.append(data)
-        db.session.commit()
 
     def delete_note(self, data):
         if not self.notes:
@@ -98,7 +97,6 @@ class HouseholdModel(db.Model):
 
     def delete_user(self, data):
         HouseholdModel.query.filter_by(hid=self.hid).one().members.remove(data)
-        db.session.commit()
 
 class HouseholdSchema(Schema):
     hid = fields.UUID()

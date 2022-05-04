@@ -1,4 +1,6 @@
 from flask import Flask, jsonify, request, Response, Blueprint, json
+from sqlalchemy import null
+import sqlalchemy
 from ..models.HouseholdModel import HouseholdModel, HouseholdSchema
 from ..models.UserModel import UserModel, UserSchema
 from ..shared.Authentication import Auth
@@ -196,11 +198,11 @@ def update_household(hid):
     household_data = serializer.dump(data)
     return jsonify(household_data)
 
-@household_api.route('/<uuid:uid>/<uuid:hid>', methods=["PUT"])
+@household_api.route('/<uuid:hid>/<uuid:uid>', methods=["PUT"])
 def add_user_to_household(hid, uid):
     household_to_add_to = HouseholdModel.get_by_hid(hid)
     household_to_add_to.add_user(uid)
-
+    household_to_add_to.save()
     return {"hid": hid}
 
 @household_api.route('/<uuid:uid>', methods=["DELETE"])
@@ -218,13 +220,17 @@ def delete_all():
         h.delete()
     return {"message": "All households deleted"}, 204
 
-@household_api.route('/<uuid:uid>/<uuid:hid>', methods=["DELETE"])
+@household_api.route('/<uuid:hid>/<uuid:uid>', methods=["DELETE"])
 def delete_user_from_household(hid, uid):
     household_to_delete_from = HouseholdModel.get_by_hid(hid)
-    try:
-        household_to_delete_from.delete_user(str(uid))
-    except:
-        return {"message": "resource not found"}, 400
+    user_to_delete = UserModel.get_by_uid(uid)
+    ##try:
+    household_to_delete_from.delete_user(str(uid))
+    household_to_delete_from.save()
+    user_to_delete.hid = sqlalchemy.null()
+    user_to_delete.save()
+    ##except:
+        ##return {"message": "resource not found"}, 400
 
     return {"message": "user deleted"}
 
